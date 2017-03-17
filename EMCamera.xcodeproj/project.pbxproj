@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		7528AB7A1E797EA4002DC4E5 /* StyleKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7528AB791E797EA4002DC4E5 /* StyleKit.swift */; };
+		7528AB7C1E797EC7002DC4E5 /* BlurredRoundedButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7528AB7B1E797EC7002DC4E5 /* BlurredRoundedButton.swift */; };
 		75527D0C1E71E2D50063957D /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75527D0B1E71E2D50063957D /* AppDelegate.swift */; };
 		75527D0E1E71E2D50063957D /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75527D0D1E71E2D50063957D /* ViewController.swift */; };
 		75527D111E71E2D50063957D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 75527D0F1E71E2D50063957D /* Main.storyboard */; };
@@ -15,6 +17,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		7528AB791E797EA4002DC4E5 /* StyleKit.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = StyleKit.swift; sourceTree = "<group>"; };
+		7528AB7B1E797EC7002DC4E5 /* BlurredRoundedButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BlurredRoundedButton.swift; sourceTree = "<group>"; };
 		75527D081E71E2D50063957D /* EMCamera.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EMCamera.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		75527D0B1E71E2D50063957D /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		75527D0D1E71E2D50063957D /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
@@ -56,6 +60,8 @@
 			children = (
 				75527D0B1E71E2D50063957D /* AppDelegate.swift */,
 				75527D0D1E71E2D50063957D /* ViewController.swift */,
+				7528AB791E797EA4002DC4E5 /* StyleKit.swift */,
+				7528AB7B1E797EC7002DC4E5 /* BlurredRoundedButton.swift */,
 				75527D0F1E71E2D50063957D /* Main.storyboard */,
 				75527D121E71E2D50063957D /* Assets.xcassets */,
 				75527D141E71E2D50063957D /* LaunchScreen.storyboard */,
@@ -137,7 +143,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7528AB7A1E797EA4002DC4E5 /* StyleKit.swift in Sources */,
 				75527D0E1E71E2D50063957D /* ViewController.swift in Sources */,
+				7528AB7C1E797EC7002DC4E5 /* BlurredRoundedButton.swift in Sources */,
 				75527D0C1E71E2D50063957D /* AppDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -261,6 +269,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				DEVELOPMENT_TEAM = 65952893XA;
 				INFOPLIST_FILE = EMCamera/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = ru.evgenymitko.EMCamera;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -274,6 +283,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				DEVELOPMENT_TEAM = 65952893XA;
 				INFOPLIST_FILE = EMCamera/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = ru.evgenymitko.EMCamera;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -300,6 +310,7 @@
 				75527D1C1E71E2D50063957D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};
