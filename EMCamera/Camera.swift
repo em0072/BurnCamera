@@ -46,6 +46,10 @@ class Camera: UIViewController, AVCaptureFileOutputRecordingDelegate, UIGestureR
     var zoomScale: CGFloat = 1
     var maxZoomScale: CGFloat = 1
     
+    let fastAnimationTime: TimeInterval = 0.3
+    let mediumAnimationTime: TimeInterval = 0.4
+    let slowAnimationTime: TimeInterval = 0.5
+    
     lazy var videoRecordingButtonEffect: UIView = {
         let view = UIView()
         view.center = self.captureButtonView.center
@@ -98,6 +102,7 @@ class Camera: UIViewController, AVCaptureFileOutputRecordingDelegate, UIGestureR
         return .portrait
     }
     
+    //MARK: - View Methods
     override func viewDidLoad() {
         setUpEverything()
         super.viewDidLoad()
@@ -108,6 +113,8 @@ class Camera: UIViewController, AVCaptureFileOutputRecordingDelegate, UIGestureR
         print("didChangeOrientation")
     }
     
+    
+    //MARK: - Setup Methods
     private func setUpEverything() {
         setUpCameraView()
         setUpView()
@@ -267,20 +274,6 @@ class Camera: UIViewController, AVCaptureFileOutputRecordingDelegate, UIGestureR
         captureButtonView.addSubview(captureBorderView)
     }
     
-    
-    
-    
-    
-    private func animateShutterView() {
-        UIView.animateKeyframes(withDuration: 0.3, delay: 0, options: .allowUserInteraction, animations: {
-            UIView.addKeyframe(withRelativeStartTime: 0, relativeDuration: 0.5, animations: {
-                self.shutterEffectView.alpha = 1
-            })
-            UIView.addKeyframe(withRelativeStartTime: 0.5, relativeDuration: 0.5, animations: {
-                self.shutterEffectView.alpha = 0
-            })
-        }, completion: nil)
-    }
     //MARK: - Actions
     @objc private func takePhoto(_ button: UIButton) {
         print("gonna take photo")
@@ -328,47 +321,99 @@ class Camera: UIViewController, AVCaptureFileOutputRecordingDelegate, UIGestureR
     }
     
     
-    //MARK: - UI Elements Customisation Helpers
+    //MARK: - UI Elements Customization Helpers
     var animateVideoButton = false
     private func setCaptureButtonToVideoMode(on isOn: Bool) {
         if isOn {
             self.view.insertSubview(videoRecordingButtonEffect, belowSubview: captureButtonView)
             self.view.addSubview(videoRecordingFrameEffect)
-            self.videoRecordingButtonEffect.transform = CGAffineTransform(scaleX: 0, y: 0)
-            self.videoRecordingButtonEffect.alpha = 0.6
-            self.videoRecordingFrameEffect.alpha = 0
-            UIView.animate(withDuration: 0.3, delay: 0, options: [.allowAnimatedContent, .beginFromCurrentState], animations: {
-                self.videoRecordingButtonEffect.transform = CGAffineTransform.identity
-                self.videoRecordingFrameEffect.alpha = 0.6
-            }, completion: { (finished) in
-                self.animateRecordingEffect()
-            })
+            animateShowingOfRecordEffect()
         } else {
-            UIView.animate(withDuration: 0.5, delay: 0, options: [.allowAnimatedContent, .beginFromCurrentState], animations: {
-                self.videoRecordingButtonEffect.transform = CGAffineTransform(scaleX: 0, y: 0)
-                self.videoRecordingFrameEffect.alpha = 0
-            }, completion: { (finished) in
-                self.videoRecordingButtonEffect.transform = CGAffineTransform.identity
-                self.videoRecordingButtonEffect.removeFromSuperview()
-            })
+            animateHidingOfRecordEffect()
         }
     }
     
-    private func animateRecordingEffect() {
-//        self.captureButtonView.isUserInteractionEnabled = false
-        UIView.animate(withDuration: 0.5, delay: 0, options: [.autoreverse, .repeat, .allowAnimatedContent, .beginFromCurrentState], animations: {
-            self.videoRecordingButtonEffect.transform = CGAffineTransform(scaleX: 1.15, y: 1.15)
-            self.videoRecordingButtonEffect.alpha = 1
-            self.videoRecordingFrameEffect.alpha = 1
-        }) { (finished) in
-//            self.captureButtonView.isUserInteractionEnabled = true
+    
+    //MARK: - Animations methods
+    private func animateShutterView() {
+        let opacity = opacityAnimation(duration: self.fastAnimationTime / 2, autoreverses: true)
+        self.shutterEffectView.layer.add(opacity, forKey: nil)
+    }
+    
+    private func animateShowingOfRecordEffect() {
+        self.videoRecordingButtonEffect.layer.opacity = 0.6
+        self.videoRecordingFrameEffect.layer.opacity = 0.6
+        CATransaction.begin()
+        CATransaction.setCompletionBlock {
+            let repetedOpacity = self.opacityAnimation(duration: self.slowAnimationTime, from: 0.6, to: 1, repeatForever: true, autoreverses: true)
+            let repetedScale = self.scaleAnimation(duration: self.slowAnimationTime, from: 1, to: 1.15, repeatForever: true, autoreverses: true)
+            let group = self.animationGroup(from: [repetedOpacity, repetedScale])
+            self.videoRecordingButtonEffect.layer.add(group, forKey: "scaleAndOpacity")
+            self.videoRecordingFrameEffect.layer.add(repetedOpacity, forKey: "frameRepeatedOpacity")
         }
+        let opacity = opacityAnimation(duration: self.fastAnimationTime, from: 0, to: 0.6)
+        let scale = scaleAnimation(duration: self.fastAnimationTime, from: 0, to: 1)
+        self.videoRecordingFrameEffect.layer.add(opacity, forKey: nil)
+        self.videoRecordingButtonEffect.layer.add(scale, forKey: nil)
+        CATransaction.commit()
     }
     
-    private func animateBorderColor(on view: UIView, with color: UIColor) {
-        
+    private func animateHidingOfRecordEffect() {
+        let currentOpacity = self.videoRecordingButtonEffect.layer.opacity
+        self.videoRecordingButtonEffect.layer.removeAnimation(forKey: "scaleAndOpacity")
+        self.videoRecordingFrameEffect.layer.removeAnimation(forKey: "frameRepeatedOpacity")
+        self.videoRecordingButtonEffect.layer.opacity = 0
+        self.videoRecordingFrameEffect.layer.opacity = 0
+        CATransaction.begin()
+        CATransaction.setCompletionBlock {
+            self.videoRecordingButtonEffect.removeFromSuperview()
+            self.videoRecordingFrameEffect.removeFromSuperview()
+        }
+        let opacity = opacityAnimation(duration: self.mediumAnimationTime, from: currentOpacity, to: 0)
+        self.videoRecordingFrameEffect.layer.add(opacity, forKey: nil)
+        self.videoRecordingButtonEffect.layer.add(opacity, forKey: nil)
+        CATransaction.commit()
     }
     
+    private func opacityAnimation(duration: TimeInterval = 0.4, from: Float = 0, to: Float = 1, repeatForever: Bool = false, autoreverses: Bool = false) -> CABasicAnimation {
+        let opacityAnimation = CABasicAnimation(keyPath: "opacity")
+        opacityAnimation.duration = duration
+        opacityAnimation.fromValue = from
+        opacityAnimation.toValue = to
+        opacityAnimation.repeatCount = repeatForever ? Float.greatestFiniteMagnitude : 0
+        opacityAnimation.autoreverses = autoreverses
+        return opacityAnimation
+    }
+    
+    private func scaleAnimation(duration: TimeInterval = 0.4, from: CGFloat = 0, to: CGFloat = 1, repeatForever: Bool = false, autoreverses: Bool = false) -> CABasicAnimation {
+        let scaleAnimation = CABasicAnimation(keyPath: "transform")
+        scaleAnimation.duration = duration
+        scaleAnimation.fromValue = CATransform3DMakeScale(from, from, 1)
+        scaleAnimation.toValue = CATransform3DMakeScale(to, to, 1)
+        scaleAnimation.repeatCount = repeatForever ? Float.greatestFiniteMagnitude : 0
+        scaleAnimation.autoreverses = autoreverses
+        return scaleAnimation
+    }
+    
+    private func animationGroup(from animations: [CABasicAnimation]) -> CAAnimation {
+        var duration = self.mediumAnimationTime
+        var repeatCount: Float = 0
+        var autoreverses = false
+        if let firstAnimation = animations.first {
+            duration = firstAnimation.duration
+            repeatCount = firstAnimation.repeatCount
+            autoreverses = firstAnimation.autoreverses
+        }
+        let group = CAAnimationGroup()
+        group.animations = animations
+        group.duration = duration
+        group.repeatCount = repeatCount
+        group.autoreverses = autoreverses
+        return group
+    }
+    
+    
+    //MARK: - Helper methods
     private func orientation() -> (image: UIImageOrientation, video: AVCaptureVideoOrientation) {
         switch UIDevice.current.orientation {
         case .portrait:
