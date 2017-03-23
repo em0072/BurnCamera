@@ -38,5 +38,7 @@
 	<string>We need your photos</string>
 	<key>NSCameraUsageDescription</key>
 	<string>We need your camera</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>We need your microphone</string>
 </dict>
 </plist>
