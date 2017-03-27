@@ -10,9 +10,6 @@ import AVFoundation
 import Photos
 
 //Constatnts
-fileprivate typealias ElementTupleSize = (width: CGFloat, height: CGFloat, bottom: CGFloat)
-fileprivate let captureButton: ElementTupleSize = (width: 75, height: 75, bottom: 0)
-fileprivate let cameraRollArrow: ElementTupleSize = (width: 40, height: 40, bottom: 0)
 
 fileprivate let cameraRedColor = UIColor(red:0.90, green:0.23, blue:0.25, alpha:1.0)
 
@@ -33,18 +30,19 @@ class Camera: UIViewController, AVCaptureFileOutputRecordingDelegate, UIGestureR
     
     var delegate: BurnCameraDelegate?
     
+    let positionManager = PositionManager()
     var previewLayer = AVCaptureVideoPreviewLayer()
     var cameraOrientation = AVCaptureVideoOrientation.portrait
     var captureButtonView = BlurredRoundedButton()
+    var zoomLabel = UILabel()
     var captureBorderView = UIView()
-    var lastImageOrientation = UIImageOrientation.right
-    var lastVideoOrientation = AVCaptureVideoOrientation.portrait
     var shutterEffectView = UIVisualEffectView()
     var shouldSaveImages = true
     var shouldSaveVideos = true
     var beginZoomScale: CGFloat = 1
     var zoomScale: CGFloat = 1
     var maxZoomScale: CGFloat = 1
+    
     
     let fastAnimationTime: TimeInterval = 0.3
     let mediumAnimationTime: TimeInterval = 0.4
@@ -169,7 +167,7 @@ class Camera: UIViewController, AVCaptureFileOutputRecordingDelegate, UIGestureR
     
     fileprivate func setupMaxZoomScale() {
         if let currentDevice = currentDevice {
-            maxZoomScale = currentDevice.activeFormat.videoMaxZoomFactor * 0.7
+            maxZoomScale = 10 //currentDevice.activeFormat.videoMaxZoomFactor * 0.6
         }
     }
 
@@ -179,21 +177,6 @@ class Camera: UIViewController, AVCaptureFileOutputRecordingDelegate, UIGestureR
             beginZoomScale = zoomScale
         }
         return true
-    }
-    
-    @objc private func zoom(_ pinch: UIPinchGestureRecognizer) {
-            zoom(scale: pinch.scale)
-    }
-    
-    private func zoom(scale: CGFloat) {
-        do {
-            try currentDevice?.lockForConfiguration()
-            zoomScale = max(1.0, min(beginZoomScale * scale, maxZoomScale))
-            currentDevice?.videoZoomFactor = zoomScale
-            currentDevice?.unlockForConfiguration()
-        } catch {
-            print("Error locking configuration")
-        }
     }
     
     private func addShutterLayer() {
@@ -235,13 +218,14 @@ class Camera: UIViewController, AVCaptureFileOutputRecordingDelegate, UIGestureR
         setUpCaptureButton()
         setUpArrowIcon()
         addZoom()
+        addZoomLabel()
     }
     
     private func setUpArrowIcon() {
         let arrow = StyleKit.imageOfArrowIcon2()
         let arrowButton = UIButton(type: .custom)
-        arrowButton.frame = frames().cameraRollArrow
-        if let transform = transformForOrientation() {
+        arrowButton.frame = positionManager.frames().cameraRollArrow
+        if let transform = positionManager.transformForOrientation() {
             arrowButton.transform = transform
         }
         arrowButton.setImage(arrow, for: .normal)
@@ -255,7 +239,7 @@ class Camera: UIViewController, AVCaptureFileOutputRecordingDelegate, UIGestureR
     
     private func setUpCaptureButton() {
         //ConfigureView
-        captureButtonView = BlurredRoundedButton(frame: frames().captureButton)
+        captureButtonView = BlurredRoundedButton(frame: positionManager.frames().captureButton)
         captureButtonView.addTarget(self, action: #selector(self.takePhoto(_:)), for: .touchUpInside)
         let longPress = UILongPressGestureRecognizer(target: self, action: #selector(self.takeVideo(_:)))
         longPress.minimumPressDuration = 0.4
@@ -274,6 +258,19 @@ class Camera: UIViewController, AVCaptureFileOutputRecordingDelegate, UIGestureR
         captureButtonView.addSubview(captureBorderView)
     }
     
+    private func addZoomLabel() {
+        zoomLabel = UILabel(frame: positionManager.frames().zoomLevelLabel)
+        updateZoomLabel()
+        zoomLabel.font = UIFont.systemFont(ofSize: 13)
+        zoomLabel.textAlignment = .center
+        zoomLabel.textColor = UIColor(white: 1, alpha: 0.8)
+        zoomLabel.layer.shadowColor = UIColor.black.cgColor
+        zoomLabel.addShadow(radius: 1, opacity: 0.7)
+        self.view.addSubview(zoomLabel)
+    }
+    
+    
+    
     //MARK: - Actions
     @objc private func takePhoto(_ button: UIButton) {
         print("gonna take photo")
@@ -285,7 +282,7 @@ class Camera: UIViewController, AVCaptureFileOutputRecordingDelegate, UIGestureR
             sessionImageOutput.captureStillImageAsynchronously(from: imageConnection, completionHandler: { (sampleBuffer, error) in
                 self.captureButtonView.isEnabled = true
                 if let sampleBuffer = sampleBuffer, let imageData = AVCaptureStillImageOutput.jpegStillImageNSDataRepresentation(sampleBuffer), let dataProvider = CGDataProvider(data: imageData as CFData), let cgImageRef = CGImage(jpegDataProviderSource: dataProvider, decode: nil, shouldInterpolate: true, intent: .defaultIntent) {
-                    let image = UIImage(cgImage: cgImageRef, scale: 1, orientation: self.orientation().image)
+                    let image = UIImage(cgImage: cgImageRef, scale: 1, orientation: self.positionManager.orientation().image)
                     if self.shouldSaveImages {
                         UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
                     }
@@ -303,7 +300,7 @@ class Camera: UIViewController, AVCaptureFileOutputRecordingDelegate, UIGestureR
             configure(.video)
             if let videoConnection = sessionVideoOutput.connection(withMediaType: AVMediaTypeVideo) {
                 if videoConnection.isVideoOrientationSupported {
-                    videoConnection.videoOrientation = orientation().video
+                    videoConnection.videoOrientation = positionManager.orientation().video
                 }
                 let fileName = "yourAwesomeVideo.mp4";
                 let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -311,6 +308,8 @@ class Camera: UIViewController, AVCaptureFileOutputRecordingDelegate, UIGestureR
                 sessionVideoOutput.startRecording(toOutputFileURL: filePath, recordingDelegate: self)
                 setCaptureButtonToVideoMode(on: true)
             }
+        case .changed:
+            print("Change gesture while recording video")
         case .ended, .cancelled:
             print("end take video")
             sessionVideoOutput.stopRecording()
@@ -320,6 +319,17 @@ class Camera: UIViewController, AVCaptureFileOutputRecordingDelegate, UIGestureR
         }
     }
     
+    @objc private func zoom(_ pinch: UIPinchGestureRecognizer) {
+        do {
+            try currentDevice?.lockForConfiguration()
+            zoomScale = max(1.0, min(beginZoomScale * pinch.scale, maxZoomScale))
+            currentDevice?.videoZoomFactor = zoomScale
+            currentDevice?.unlockForConfiguration()
+            updateZoomLabel()
+        } catch {
+            print("Error locking configuration")
+        }
+    }
     
     //MARK: - UI Elements Customization Helpers
     var animateVideoButton = false
@@ -333,6 +343,16 @@ class Camera: UIViewController, AVCaptureFileOutputRecordingDelegate, UIGestureR
         }
     }
     
+    private func updateZoomLabel() {
+        if zoomScale > 1 {
+            zoomLabel.text = String(format: "%.1f", zoomScale)
+            if zoomLabel.alpha < 1.1 {
+                zoomLabel.animateAlpha(to: 1, time: mediumAnimationTime)
+            }
+        } else if zoomLabel.alpha > 0 {
+            zoomLabel.animateAlpha(to: 0, time: mediumAnimationTime)
+        }
+    }
     
     //MARK: - Animations methods
     private func animateShutterView() {
@@ -414,80 +434,9 @@ class Camera: UIViewController, AVCaptureFileOutputRecordingDelegate, UIGestureR
     
     
     //MARK: - Helper methods
-    private func orientation() -> (image: UIImageOrientation, video: AVCaptureVideoOrientation) {
-        switch UIDevice.current.orientation {
-        case .portrait:
-            lastImageOrientation = .right
-            lastVideoOrientation = .portrait
-        case .landscapeLeft:
-            lastImageOrientation = .up
-            lastVideoOrientation = .landscapeRight
-        case .landscapeRight:
-            lastImageOrientation = .down
-            lastVideoOrientation = .landscapeLeft
-        case .portraitUpsideDown:
-            lastImageOrientation = .left
-            lastVideoOrientation = .portraitUpsideDown
-        default:
-            break
-        }
-        return (lastImageOrientation, lastVideoOrientation)
-    }
-    
-    private func frames() -> (captureButton: CGRect, cameraRollArrow: CGRect) {
-        let screen = (width: self.view.frame.width, height: self.view.frame.height)
-        //Frames for UI Elements
-        var captureButtonFrame = CGRect(x: (screen.width  - captureButton.width) / 2,
-                                        y: screen.height - captureButton.height - captureButton.bottom - cameraRollArrow.height - cameraRollArrow.bottom,
-                                        width: captureButton.width,
-                                        height: captureButton.height)
-        var arrowFrame = CGRect(x: (screen.width  - cameraRollArrow.width) / 2,
-                                y: screen.height - cameraRollArrow.height - cameraRollArrow.bottom,
-                                width: cameraRollArrow.width,
-                                height: cameraRollArrow.height)
-        //Change origin dependend on screen orientation at startup
-        switch UIApplication.shared.statusBarOrientation {
-        case .landscapeRight:
-            captureButtonFrame.origin = CGPoint(x: screen.width  - captureButton.width - captureButton.bottom - cameraRollArrow.width - cameraRollArrow.bottom, y: (screen.height  - captureButton.height) / 2)
-            arrowFrame.origin = CGPoint(x: screen.width  - cameraRollArrow.width - cameraRollArrow.bottom,
-                                        y: (screen.height  - cameraRollArrow.height) / 2)
-        case .landscapeLeft:
-            captureButtonFrame.origin = CGPoint(x: captureButton.bottom + cameraRollArrow.height + cameraRollArrow.bottom, y: (screen.height  - captureButton.height) / 2)
-            arrowFrame.origin = CGPoint(x: cameraRollArrow.bottom,
-                                        y: (screen.height  - cameraRollArrow.height) / 2)
-        case .portraitUpsideDown:
-            captureButtonFrame.origin = CGPoint(x: (screen.width  - captureButton.width) / 2,
-                                                y: cameraRollArrow.bottom)
-            arrowFrame.origin = CGPoint(x: (screen.width  - cameraRollArrow.height) / 2,
-                                        y: cameraRollArrow.bottom)
-        default:
-            break
-        }
-        return (captureButtonFrame, arrowFrame)
-    }
     
     
-    private func transformForOrientation() -> CGAffineTransform? {
-        var angle: CGFloat? = nil
-        switch UIApplication.shared.statusBarOrientation {
-        case .portrait:
-            angle = 0
-        case .landscapeLeft:
-            angle = .pi / 2
-        case .landscapeRight:
-            angle = .pi / -2
-        case .portraitUpsideDown:
-            angle = .pi
-        default:
-            break
-        }
-        if let angle = angle {
-            return CGAffineTransform(rotationAngle: angle)
-        } else {
-            return nil
-        }
-    }
-    
+    //MARK: - AVCaptureFileOutputRecordingDelegate
     func capture(_ captureOutput: AVCaptureFileOutput!, didFinishRecordingToOutputFileAt outputFileURL: URL!, fromConnections connections: [Any]!, error: Error!) {
         print("capture did finish")
         print(captureOutput)

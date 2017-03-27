@@ -12,8 +12,6 @@ import UIKit
 
 class StyleKit: NSObject
 {
-    
-    
     //MARK: - Canvas Drawings
     
     /// ArrowIcon
@@ -123,5 +121,5 @@ class StyleKit: NSObject
         }
     }
     
-    
 }
+
