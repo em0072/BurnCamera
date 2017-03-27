@@ -14,7 +14,7 @@ internal let captureButton: ElementTupleSize = (width: 75, height: 75, fromSide:
 internal let cameraRollArrow: ElementTupleSize = (width: 40, height: 40, fromSide: 0)
 internal let zoomLevelLabel: ElementTupleSize = (width: 25, height: 25, fromSide: 8)
 
-class PositionManager {
+class PositionController {
         
     let screen = (width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.height)
     

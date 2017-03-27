@@ -30,23 +30,24 @@ class Camera: UIViewController, AVCaptureFileOutputRecordingDelegate, UIGestureR
     
     var delegate: BurnCameraDelegate?
     
-    let positionManager = PositionManager()
+    let position = PositionController()
+    let animation = AnimationController()
+    
     var previewLayer = AVCaptureVideoPreviewLayer()
     var cameraOrientation = AVCaptureVideoOrientation.portrait
     var captureButtonView = BlurredRoundedButton()
     var zoomLabel = UILabel()
     var captureBorderView = UIView()
+    var cameraRollArrowButton: UIButton!
     var shutterEffectView = UIVisualEffectView()
     var shouldSaveImages = true
     var shouldSaveVideos = true
     var beginZoomScale: CGFloat = 1
     var zoomScale: CGFloat = 1
     var maxZoomScale: CGFloat = 1
+    var initialLongTouchLocation = CGFloat()
     
     
-    let fastAnimationTime: TimeInterval = 0.3
-    let mediumAnimationTime: TimeInterval = 0.4
-    let slowAnimationTime: TimeInterval = 0.5
     
     lazy var videoRecordingButtonEffect: UIView = {
         let view = UIView()
@@ -158,7 +159,7 @@ class Camera: UIViewController, AVCaptureFileOutputRecordingDelegate, UIGestureR
     }
     
     private func addZoom() {
-        let pinchGesture = UIPinchGestureRecognizer(target: self, action: #selector(self.zoom(_:)))
+        let pinchGesture = UIPinchGestureRecognizer(target: self, action: #selector(self.handlePinch(_:)))
         pinchGesture.delegate = self
         self.view.addGestureRecognizer(pinchGesture)
         setupMaxZoomScale()
@@ -167,7 +168,7 @@ class Camera: UIViewController, AVCaptureFileOutputRecordingDelegate, UIGestureR
     
     fileprivate func setupMaxZoomScale() {
         if let currentDevice = currentDevice {
-            maxZoomScale = 10 //currentDevice.activeFormat.videoMaxZoomFactor * 0.6
+            maxZoomScale = min(10, currentDevice.activeFormat.videoMaxZoomFactor)
         }
     }
 
@@ -223,23 +224,23 @@ class Camera: UIViewController, AVCaptureFileOutputRecordingDelegate, UIGestureR
     
     private func setUpArrowIcon() {
         let arrow = StyleKit.imageOfArrowIcon2()
-        let arrowButton = UIButton(type: .custom)
-        arrowButton.frame = positionManager.frames().cameraRollArrow
-        if let transform = positionManager.transformForOrientation() {
-            arrowButton.transform = transform
+        cameraRollArrowButton = UIButton(type: .custom)
+        cameraRollArrowButton.frame = position.frames().cameraRollArrow
+        if let transform = position.transformForOrientation() {
+            cameraRollArrowButton.transform = transform
         }
-        arrowButton.setImage(arrow, for: .normal)
-        arrowButton.contentMode = .center
-        arrowButton.layer.shadowColor = UIColor.black.cgColor
-        arrowButton.layer.shadowOffset = CGSize.zero
-        arrowButton.layer.shadowRadius = 2
-        arrowButton.layer.shadowOpacity = 0.5
-        self.view.addSubview(arrowButton)
+        cameraRollArrowButton.setImage(arrow, for: .normal)
+        cameraRollArrowButton.contentMode = .center
+        cameraRollArrowButton.layer.shadowColor = UIColor.black.cgColor
+        cameraRollArrowButton.layer.shadowOffset = CGSize.zero
+        cameraRollArrowButton.layer.shadowRadius = 2
+        cameraRollArrowButton.layer.shadowOpacity = 0.5
+        self.view.addSubview(cameraRollArrowButton)
     }
     
     private func setUpCaptureButton() {
         //ConfigureView
-        captureButtonView = BlurredRoundedButton(frame: positionManager.frames().captureButton)
+        captureButtonView = BlurredRoundedButton(frame: position.frames().captureButton)
         captureButtonView.addTarget(self, action: #selector(self.takePhoto(_:)), for: .touchUpInside)
         let longPress = UILongPressGestureRecognizer(target: self, action: #selector(self.takeVideo(_:)))
         longPress.minimumPressDuration = 0.4
@@ -259,7 +260,7 @@ class Camera: UIViewController, AVCaptureFileOutputRecordingDelegate, UIGestureR
     }
     
     private func addZoomLabel() {
-        zoomLabel = UILabel(frame: positionManager.frames().zoomLevelLabel)
+        zoomLabel = UILabel(frame: position.frames().zoomLevelLabel)
         updateZoomLabel()
         zoomLabel.font = UIFont.systemFont(ofSize: 13)
         zoomLabel.textAlignment = .center
@@ -282,7 +283,7 @@ class Camera: UIViewController, AVCaptureFileOutputRecordingDelegate, UIGestureR
             sessionImageOutput.captureStillImageAsynchronously(from: imageConnection, completionHandler: { (sampleBuffer, error) in
                 self.captureButtonView.isEnabled = true
                 if let sampleBuffer = sampleBuffer, let imageData = AVCaptureStillImageOutput.jpegStillImageNSDataRepresentation(sampleBuffer), let dataProvider = CGDataProvider(data: imageData as CFData), let cgImageRef = CGImage(jpegDataProviderSource: dataProvider, decode: nil, shouldInterpolate: true, intent: .defaultIntent) {
-                    let image = UIImage(cgImage: cgImageRef, scale: 1, orientation: self.positionManager.orientation().image)
+                    let image = UIImage(cgImage: cgImageRef, scale: 1, orientation: self.position.orientation().image)
                     if self.shouldSaveImages {
                         UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
                     }
@@ -293,36 +294,42 @@ class Camera: UIViewController, AVCaptureFileOutputRecordingDelegate, UIGestureR
     }
     
     @objc private func takeVideo(_ gesture: UILongPressGestureRecognizer) {
+        let touchYLocation = gesture.location(in: captureButtonView).y
         switch gesture.state {
         case .began:
+            initialLongTouchLocation = touchYLocation
             videoRecordingButtonEffect.layer.removeAllAnimations()
-            print("begin take video")
             configure(.video)
             if let videoConnection = sessionVideoOutput.connection(withMediaType: AVMediaTypeVideo) {
                 if videoConnection.isVideoOrientationSupported {
-                    videoConnection.videoOrientation = positionManager.orientation().video
+                    videoConnection.videoOrientation = position.orientation().video
                 }
-                let fileName = "yourAwesomeVideo.mp4";
+                let fileName = "yourAwesomeVideo.mp4"
                 let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
                 let filePath = documentsURL.appendingPathComponent(fileName)
                 sessionVideoOutput.startRecording(toOutputFileURL: filePath, recordingDelegate: self)
                 setCaptureButtonToVideoMode(on: true)
+                animation.springTranslation(of: cameraRollArrowButton, yTranslation: position.frames().cameraRollArrow.height, xTranslation: 0, with: animation.duration.medium, completion: nil)
             }
-        case .changed:
-            print("Change gesture while recording video")
+                case .changed:
+            let translation = initialLongTouchLocation - touchYLocation
+            let scale = max(1.0, min(translation / 30, maxZoomScale))
+            zoom(to: scale)
         case .ended, .cancelled:
-            print("end take video")
             sessionVideoOutput.stopRecording()
             setCaptureButtonToVideoMode(on: false)
+            animation.springTranslation(of: cameraRollArrowButton, yTranslation: -position.frames().cameraRollArrow.height, xTranslation: 0, with: animation.duration.medium, completion: nil)
         default:
             break
         }
     }
     
-    @objc private func zoom(_ pinch: UIPinchGestureRecognizer) {
+    
+    private func zoom(to scale: CGFloat) {
         do {
             try currentDevice?.lockForConfiguration()
-            zoomScale = max(1.0, min(beginZoomScale * pinch.scale, maxZoomScale))
+            zoomScale = scale
+            print("zoom with pinch, scale \(zoomScale)")
             currentDevice?.videoZoomFactor = zoomScale
             currentDevice?.unlockForConfiguration()
             updateZoomLabel()
@@ -330,6 +337,12 @@ class Camera: UIViewController, AVCaptureFileOutputRecordingDelegate, UIGestureR
             print("Error locking configuration")
         }
     }
+    
+    @objc private func handlePinch(_ pinch: UIPinchGestureRecognizer) {
+        let scale = max(1.0, min(beginZoomScale * pinch.scale, maxZoomScale))
+        zoom(to: scale)
+    }
+
     
     //MARK: - UI Elements Customization Helpers
     var animateVideoButton = false
@@ -347,16 +360,16 @@ class Camera: UIViewController, AVCaptureFileOutputRecordingDelegate, UIGestureR
         if zoomScale > 1 {
             zoomLabel.text = String(format: "%.1f", zoomScale)
             if zoomLabel.alpha < 1.1 {
-                zoomLabel.animateAlpha(to: 1, time: mediumAnimationTime)
+                zoomLabel.animateAlpha(to: 1, time: animation.duration.medium)
             }
         } else if zoomLabel.alpha > 0 {
-            zoomLabel.animateAlpha(to: 0, time: mediumAnimationTime)
+            zoomLabel.animateAlpha(to: 0, time: animation.duration.medium)
         }
     }
     
     //MARK: - Animations methods
     private func animateShutterView() {
-        let opacity = opacityAnimation(duration: self.fastAnimationTime / 2, autoreverses: true)
+        let opacity = animation.opacity(with: self.animation.duration.fast / 2, autoreverses: true)
         self.shutterEffectView.layer.add(opacity, forKey: nil)
     }
     
@@ -365,14 +378,14 @@ class Camera: UIViewController, AVCaptureFileOutputRecordingDelegate, UIGestureR
         self.videoRecordingFrameEffect.layer.opacity = 0.6
         CATransaction.begin()
         CATransaction.setCompletionBlock {
-            let repetedOpacity = self.opacityAnimation(duration: self.slowAnimationTime, from: 0.6, to: 1, repeatForever: true, autoreverses: true)
-            let repetedScale = self.scaleAnimation(duration: self.slowAnimationTime, from: 1, to: 1.15, repeatForever: true, autoreverses: true)
-            let group = self.animationGroup(from: [repetedOpacity, repetedScale])
+            let repetedOpacity = self.animation.opacity(with: self.animation.duration.halfSecond, from: 0.6, to: 1, repeatForever: true, autoreverses: true)
+            let repetedScale = self.animation.scale(with: self.animation.duration.halfSecond, from: 1, to: 1.15, repeatForever: true, autoreverses: true)
+            let group = self.animation.group(from: [repetedOpacity, repetedScale])
             self.videoRecordingButtonEffect.layer.add(group, forKey: "scaleAndOpacity")
             self.videoRecordingFrameEffect.layer.add(repetedOpacity, forKey: "frameRepeatedOpacity")
         }
-        let opacity = opacityAnimation(duration: self.fastAnimationTime, from: 0, to: 0.6)
-        let scale = scaleAnimation(duration: self.fastAnimationTime, from: 0, to: 1)
+        let opacity = animation.opacity(with: self.animation.duration.fast, from: 0, to: 0.6)
+        let scale = animation.scale(with: self.animation.duration.fast, from: 0, to: 1)
         self.videoRecordingFrameEffect.layer.add(opacity, forKey: nil)
         self.videoRecordingButtonEffect.layer.add(scale, forKey: nil)
         CATransaction.commit()
@@ -389,49 +402,11 @@ class Camera: UIViewController, AVCaptureFileOutputRecordingDelegate, UIGestureR
             self.videoRecordingButtonEffect.removeFromSuperview()
             self.videoRecordingFrameEffect.removeFromSuperview()
         }
-        let opacity = opacityAnimation(duration: self.mediumAnimationTime, from: currentOpacity, to: 0)
+        let opacity = animation.opacity(with: self.animation.duration.medium, from: currentOpacity, to: 0)
         self.videoRecordingFrameEffect.layer.add(opacity, forKey: nil)
         self.videoRecordingButtonEffect.layer.add(opacity, forKey: nil)
         CATransaction.commit()
     }
-    
-    private func opacityAnimation(duration: TimeInterval = 0.4, from: Float = 0, to: Float = 1, repeatForever: Bool = false, autoreverses: Bool = false) -> CABasicAnimation {
-        let opacityAnimation = CABasicAnimation(keyPath: "opacity")
-        opacityAnimation.duration = duration
-        opacityAnimation.fromValue = from
-        opacityAnimation.toValue = to
-        opacityAnimation.repeatCount = repeatForever ? Float.greatestFiniteMagnitude : 0
-        opacityAnimation.autoreverses = autoreverses
-        return opacityAnimation
-    }
-    
-    private func scaleAnimation(duration: TimeInterval = 0.4, from: CGFloat = 0, to: CGFloat = 1, repeatForever: Bool = false, autoreverses: Bool = false) -> CABasicAnimation {
-        let scaleAnimation = CABasicAnimation(keyPath: "transform")
-        scaleAnimation.duration = duration
-        scaleAnimation.fromValue = CATransform3DMakeScale(from, from, 1)
-        scaleAnimation.toValue = CATransform3DMakeScale(to, to, 1)
-        scaleAnimation.repeatCount = repeatForever ? Float.greatestFiniteMagnitude : 0
-        scaleAnimation.autoreverses = autoreverses
-        return scaleAnimation
-    }
-    
-    private func animationGroup(from animations: [CABasicAnimation]) -> CAAnimation {
-        var duration = self.mediumAnimationTime
-        var repeatCount: Float = 0
-        var autoreverses = false
-        if let firstAnimation = animations.first {
-            duration = firstAnimation.duration
-            repeatCount = firstAnimation.repeatCount
-            autoreverses = firstAnimation.autoreverses
-        }
-        let group = CAAnimationGroup()
-        group.animations = animations
-        group.duration = duration
-        group.repeatCount = repeatCount
-        group.autoreverses = autoreverses
-        return group
-    }
-    
     
     //MARK: - Helper methods
     
